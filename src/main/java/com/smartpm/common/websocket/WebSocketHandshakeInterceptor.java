@@ -3,6 +3,7 @@ package com.smartpm.common.websocket;
 import com.smartpm.common.utils.JWTUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
@@ -16,7 +17,10 @@ import java.util.Map;
  * 前端连接格式：/ws/project/{projectId}?token=xxx
  */
 @Slf4j
+@RequiredArgsConstructor
 public class WebSocketHandshakeInterceptor implements HandshakeInterceptor {
+
+    private final JWTUtil jwtUtil;
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
@@ -24,11 +28,11 @@ public class WebSocketHandshakeInterceptor implements HandshakeInterceptor {
         if (request instanceof ServletServerHttpRequest servletRequest) {
             HttpServletRequest httpReq = servletRequest.getServletRequest();
             String token = httpReq.getParameter("token");
-            if (token == null || !JWTUtil.validate(token)) {
+            if (token == null || !jwtUtil.validate(token)) {
                 log.warn("WebSocket 握手被拒: token 无效或缺失");
                 return false;
             }
-            attributes.put("userId", JWTUtil.getUserId(token));
+            attributes.put("userId", jwtUtil.getUserId(token));
         }
         return true;
     }

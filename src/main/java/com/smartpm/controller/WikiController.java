@@ -2,6 +2,9 @@ package com.smartpm.controller;
 
 import com.smartpm.common.result.R;
 import com.smartpm.entity.Wiki;
+import com.smartpm.entity.WikiVersion;
+import com.smartpm.dto.WikiTaskLinksDTO;
+import jakarta.validation.Valid;
 import com.smartpm.service.AIService;
 import com.smartpm.service.WikiService;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +35,10 @@ public class WikiController {
     }
 
     @GetMapping("/list/{projectId}")
-    public R<List<Map<String, Object>>> list(@PathVariable Long projectId) {
-        List<Map<String, Object>> list = wikiService.listByProject(projectId);
+    public R<List<Map<String, Object>>> list(@PathVariable Long projectId,
+                                             @RequestParam(required = false) String keyword,
+                                             @RequestParam(required = false) Long taskId) {
+        List<Map<String, Object>> list = wikiService.listByProject(projectId, keyword, taskId);
         return R.ok(list);
     }
 
@@ -49,6 +54,21 @@ public class WikiController {
                           @RequestParam(required = false) String content) {
         Wiki wiki = wikiService.update(id, title, content);
         return R.ok(wiki);
+    }
+
+    @GetMapping("/{id}/versions")
+    public R<List<WikiVersion>> versions(@PathVariable Long id) {
+        return R.ok(wikiService.listVersions(id));
+    }
+
+    @PostMapping("/{id}/versions/{versionId}/restore")
+    public R<Wiki> restore(@PathVariable Long id, @PathVariable Long versionId) {
+        return R.ok(wikiService.restoreVersion(id, versionId));
+    }
+
+    @PutMapping("/{id}/task-links")
+    public R<List<Long>> updateLinks(@PathVariable Long id, @Valid @RequestBody WikiTaskLinksDTO dto) {
+        return R.ok(wikiService.updateTaskLinks(id, dto.getTaskIds()));
     }
 
     @DeleteMapping("/{id}")

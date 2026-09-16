@@ -2,6 +2,7 @@ package com.smartpm.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartpm.common.result.R;
+import com.smartpm.common.utils.UserHolder;
 import com.smartpm.dto.MilestoneDTO;
 import com.smartpm.dto.AIProjectPlanDTO;
 import com.smartpm.common.websocket.TaskWebSocketHandler;
@@ -9,14 +10,19 @@ import com.smartpm.entity.Project;
 import com.smartpm.entity.ProjectMember;
 import com.smartpm.entity.ProjectMilestone;
 import com.smartpm.entity.User;
+import com.smartpm.entity.AiOperationLog;
 import com.smartpm.mapper.ProjectMemberMapper;
 import com.smartpm.mapper.UserMapper;
 import com.smartpm.service.ProjectService;
 import com.smartpm.service.MilestoneService;
 import com.smartpm.service.AIPlanningService;
+import com.smartpm.service.AiOperationLogService;
+import com.smartpm.vo.ProjectSummaryVO;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -36,6 +42,7 @@ public class ProjectController {
     private final MilestoneService milestoneService;
     private final ProjectMemberMapper projectMemberMapper;
     private final UserMapper userMapper;
+    private final AiOperationLogService aiLogService;
 
     @PostMapping("/create")
     public R<Project> create(@RequestParam String name,
@@ -45,9 +52,17 @@ public class ProjectController {
     }
 
     @GetMapping("/list")
-    public R<List<Project>> list() {
+    public R<List<ProjectSummaryVO>> list() {
         List<Project> projects = projectService.list();
-        return R.ok(projects);
+        Long currentUserId = UserHolder.getUserId();
+        Map<Long, String> permissions = projectMemberMapper.selectList(
+                        new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getUserId, currentUserId))
+                .stream().collect(Collectors.toMap(ProjectMember::getProjectId,
+                        member -> member.getPermission() == null ? "MEMBER" : member.getPermission(),
+                        (left, right) -> left));
+        return R.ok(projects.stream()
+                .map(project -> ProjectSummaryVO.from(project, currentUserId, permissions.get(project.getId())))
+                .toList());
     }
 
     @PutMapping("/update")
@@ -155,12 +170,12 @@ public class ProjectController {
     }
 
     @PostMapping("/{projectId}/milestones")
-    public R<ProjectMilestone> createMilestone(@PathVariable Long projectId, @RequestBody MilestoneDTO dto) {
+    public R<ProjectMilestone> createMilestone(@PathVariable Long projectId, @Valid @RequestBody MilestoneDTO dto) {
         return R.ok(milestoneService.create(projectId, dto));
     }
 
     @PutMapping("/{projectId}/milestones")
-    public R<ProjectMilestone> updateMilestone(@PathVariable Long projectId, @RequestBody MilestoneDTO dto) {
+    public R<ProjectMilestone> updateMilestone(@PathVariable Long projectId, @Valid @RequestBody MilestoneDTO dto) {
         return R.ok(milestoneService.update(projectId, dto));
     }
 
@@ -171,13 +186,24 @@ public class ProjectController {
     }
 
     @PostMapping("/{projectId}/ai-plan")
-    public R<AIProjectPlanDTO> generateAiPlan(@PathVariable Long projectId) {
-        return R.ok(aiPlanningService.generateProjectPlan(projectId));
+    public ResponseEntity<R<AIProjectPlanDTO>> generateAiPlan(@PathVariable Long projectId) {
+        AiOperationLog operation = aiLogService.start("PROJECT_PLAN", projectId, null);
+        try {
+            AIProjectPlanDTO plan = aiPlanningService.generateProjectPlan(projectId);
+            aiLogService.succeed(operation, plan.getTasks() == null ? 0 : plan.getTasks().size(), false);
+            return ResponseEntity.ok().header("X-AI-Operation-Id", String.valueOf(operation.getId())).body(R.ok(plan));
+        } catch (RuntimeException e) {
+            aiLogService.fail(operation, e);
+            throw e;
+        }
     }
 
     @PostMapping("/{projectId}/ai-plan/apply")
-    public R<List<com.smartpm.entity.Task>> applyAiPlan(@PathVariable Long projectId, @RequestBody AIProjectPlanDTO plan) {
+    public R<List<com.smartpm.entity.Task>> applyAiPlan(@PathVariable Long projectId,
+                                                        @RequestParam(required = false) Long operationId,
+                                                        @RequestBody AIProjectPlanDTO plan) {
         List<com.smartpm.entity.Task> tasks = aiPlanningService.applyProjectPlan(projectId, plan);
+        if (operationId != null) aiLogService.markApplied(operationId, 0);
         wsHandler.broadcast(projectId, "{\"type\":\"TASK_UPDATED\"}");
         return R.ok(tasks);
     }
@@ -193,6 +219,7 @@ public class ProjectController {
     @GetMapping(value = "/{projectId}/ai-summary", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter aiSummary(@PathVariable Long projectId) {
         log.info("[AI-Summary] 收到请求: projectId={}", projectId);
+        AiOperationLog operation = aiLogService.start("WEEKLY_SUMMARY", projectId, null);
 
         SseEmitter emitter = new SseEmitter(300_000L);
 
@@ -207,6 +234,7 @@ public class ProjectController {
                         }
                     },
                     error -> {
+                        aiLogService.fail(operation, error);
                         log.error("[AI-Summary] 异步流生成异常，具体原因为：", error);
                         try {
                             String errMsg = "[ERROR] " + (error.getMessage() != null
@@ -218,11 +246,13 @@ public class ProjectController {
                         emitter.completeWithError(error);
                     },
                     () -> {
+                        aiLogService.succeed(operation, 0, false);
                         log.info("[AI-Summary] 流式响应完成 projectId={}", projectId);
                         emitter.complete();
                     }
             );
         } catch (Exception e) {
+            aiLogService.fail(operation, e);
             // 捕获 generateSummary() 的同步异常（如项目不存在）
             log.error("[AI-Summary] 同步初始化失败，具体原因为：", e);
             try {

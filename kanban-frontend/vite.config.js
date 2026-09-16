@@ -28,6 +28,16 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
-    chunkSizeWarningLimit: 1000
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vue-core': ['vue', 'vue-router', 'pinia'],
+          'element-ui': ['element-plus', '@element-plus/icons-vue'],
+          charts: ['echarts'],
+          editor: ['md-editor-v3', 'markdown-it']
+        }
+      }
+    }
   }
 })

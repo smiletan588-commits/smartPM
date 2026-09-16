@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @Data
 public class AnalyticsVO {
@@ -12,6 +13,15 @@ public class AnalyticsVO {
     private int totalTasks;
     private int completedTasks;
     private int inProgressTasks;
+    private int mainTasks;
+    private int subTasks;
+    private int overdueTasks;
+    private LocalDate effectiveFrom;
+    private LocalDate effectiveTo;
+    private Double onTimeCompletionRate;
+    private Double averageDelayDays;
+    private Double averageCycleHours;
+    private int completionSampleSize;
     private List<StatusItem> statusDistribution;
     private List<ProjectRankItem> projectTaskRanking;
     private List<DailyTrendItem> dailyCompletedTrend;
@@ -26,6 +36,7 @@ public class AnalyticsVO {
     @Data
     @AllArgsConstructor
     public static class ProjectRankItem {
+        private Long projectId;
         private String projectName;
         private long taskCount;
     }

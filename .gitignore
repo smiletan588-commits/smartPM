@@ -44,6 +44,9 @@ kanban-frontend/node_modules/
 kanban-frontend/dist/
 kanban-frontend/visual-output/
 
+### Generated runtime artifacts ###
+tmp/
+
 ### Local configuration ###
 .claude/settings.local.json
 .env

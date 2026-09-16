@@ -1,10 +1,11 @@
 # ---------- 前端构建阶段 ----------
 ARG DOCKER_REGISTRY=m.daocloud.io/docker.io
-FROM ${DOCKER_REGISTRY}/library/node:20-alpine AS frontend-builder
+FROM ${DOCKER_REGISTRY}/library/node:22-alpine AS frontend-builder
 
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 WORKDIR /frontend
 COPY kanban-frontend/package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci --registry=${NPM_REGISTRY}
 COPY kanban-frontend/ ./
 RUN npm run build
 

@@ -27,6 +27,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/project/:id/product-lab',
+    name: 'ProductLab',
+    component: () => import('@/views/ProductLab.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/project/:id/manage',
     name: 'ProjectManagement',
     component: () => import('@/views/ProjectManagement.vue'),
@@ -66,8 +72,6 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {
     next('/login')
   } else if (to.meta.requiresAdmin && userStore.systemRole !== 'ADMIN') {
-    next('/dashboard')
-  } else if (to.meta.guest && userStore.isLoggedIn) {
     next('/dashboard')
   } else {
     next()

@@ -7,6 +7,7 @@ import com.smartpm.common.utils.UserHolder;
 import com.smartpm.entity.User;
 import com.smartpm.mapper.UserMapper;
 import com.smartpm.service.UserService;
+import com.smartpm.service.AuditService;
 import com.smartpm.vo.AdminUserVO;
 import com.smartpm.vo.LoginVO;
 import lombok.RequiredArgsConstructor;
@@ -23,15 +24,19 @@ public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final JWTUtil jwtUtil;
+    private final AuditService auditService;
 
     private static final Set<String> VALID_IDENTITIES = Set.of(
-            "PROJECT_MANAGER", "FRONTEND_DEV", "BACKEND_DEV", "QA_TESTER", "UI_DESIGNER"
+            "PROJECT_MANAGER", "PRODUCT_MANAGER", "FRONTEND_DEV", "BACKEND_DEV", "QA_TESTER", "UI_DESIGNER"
     );
     private static final Set<String> VALID_SYSTEM_ROLES = Set.of("ADMIN", "USER");
     private static final Set<String> VALID_STATUSES = Set.of("ACTIVE", "DISABLED");
 
     @Override
     public User register(String username, String password, String nickname, String identity) {
+        if (username == null || username.isBlank()) throw new BusinessException("用户名不能为空");
+        if (password == null || password.length() < 8) throw new BusinessException("密码至少需要 8 位");
         Long count = userMapper.selectCount(
                 new LambdaQueryWrapper<User>().eq(User::getUsername, username));
         if (count > 0) {
@@ -62,19 +67,27 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public LoginVO login(String username, String password) {
+        if (username == null || username.isBlank() || password == null || password.isBlank()) {
+            auditService.recordLogin(null, username, false, "用户名或密码错误");
+            throw new BusinessException("用户名或密码错误");
+        }
         User user = userMapper.selectOne(
                 new LambdaQueryWrapper<User>().eq(User::getUsername, username));
         if (user == null) {
+            auditService.recordLogin(null, username, false, "用户名或密码错误");
             throw new BusinessException("用户名或密码错误");
         }
         if (!"ACTIVE".equals(user.getStatus())) {
-            throw new BusinessException("该账号已被管理员停用");
+            auditService.recordLogin(user.getId(), username, false, "账号已停用");
+            throw new BusinessException("账号已停用，请联系系统管理员");
         }
         if (!passwordEncoder.matches(password, user.getPassword())) {
+            auditService.recordLogin(user.getId(), username, false, "用户名或密码错误");
             throw new BusinessException("用户名或密码错误");
         }
 
-        String token = JWTUtil.generate(user.getId(), user.getUsername());
+        String token = jwtUtil.generate(user.getId(), user.getUsername());
+        auditService.recordLogin(user.getId(), username, true, null);
         return new LoginVO(token, user.getId(), user.getUsername(), user.getIdentity(), user.getSystemRole());
     }
 
@@ -146,8 +159,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public void resetUserPassword(Long userId, String password) {
         requireSystemAdmin();
-        if (password == null || password.length() < 3) {
-            throw new BusinessException("新密码至少需要 3 位");
+        if (password == null || password.length() < 8) {
+            throw new BusinessException("新密码至少需要 8 位");
         }
         User target = requireUser(userId);
         target.setPassword(passwordEncoder.encode(password));

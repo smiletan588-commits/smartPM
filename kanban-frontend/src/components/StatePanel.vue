@@ -1,5 +1,5 @@
 <template>
-  <div class="state-panel" :class="`is-${tone}`"><div class="state-mark" aria-hidden="true"><slot name="icon">{{ tone === 'error' ? '!' : '+' }}</slot></div><h3>{{ title }}</h3><p v-if="description">{{ description }}</p><div v-if="$slots.actions" class="state-actions"><slot name="actions" /></div></div>
+  <div class="state-panel" :class="`is-${tone}`" :role="tone === 'error' ? 'alert' : 'status'" :aria-live="tone === 'error' ? 'assertive' : 'polite'"><div class="state-mark" aria-hidden="true"><slot name="icon">{{ tone === 'error' ? '!' : '+' }}</slot></div><h3>{{ title }}</h3><p v-if="description">{{ description }}</p><div v-if="$slots.actions" class="state-actions"><slot name="actions" /></div></div>
 </template>
 <script setup>
 defineProps({ title: { type: String, required: true }, description: { type: String, default: '' }, tone: { type: String, default: 'empty' } })

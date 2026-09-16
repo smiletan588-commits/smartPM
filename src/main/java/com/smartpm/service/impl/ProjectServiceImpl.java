@@ -115,7 +115,7 @@ public class ProjectServiceImpl implements ProjectService {
             throw new BusinessException("项目不存在");
         }
         if (!project.getCreatorId().equals(UserHolder.getUserId())) {
-            throw new BusinessException("无权删除此项目");
+            throw new BusinessException(403, "只有项目负责人可以删除项目");
         }
 
         if (project.getDeletedAt() != null) throw new BusinessException("项目已在回收站中");
@@ -284,7 +284,7 @@ public class ProjectServiceImpl implements ProjectService {
 
     private String validIdentity(String identity, String fallback) {
         String value = identity == null || identity.isBlank() ? fallback : identity.trim().toUpperCase(Locale.ROOT);
-        List<String> allowed = List.of("PROJECT_MANAGER", "FRONTEND_DEV", "BACKEND_DEV", "QA_TESTER", "UI_DESIGNER");
+        List<String> allowed = List.of("PROJECT_MANAGER", "PRODUCT_MANAGER", "FRONTEND_DEV", "BACKEND_DEV", "QA_TESTER", "UI_DESIGNER");
         if (value == null || !allowed.contains(value)) throw new BusinessException("无效的岗位身份");
         return value;
     }

@@ -6,12 +6,16 @@ export function createTask(projectId, title, description, assigneeId, dueDate, s
   })
 }
 
-export function listTasks(projectId) {
-  return request.get(`/task/list/${projectId}`)
+export function listTasks(projectId, config) {
+  return config ? request.get(`/task/list/${projectId}`, config) : request.get(`/task/list/${projectId}`)
 }
 
 export function updateTask(dto) {
   return request.put('/task/update', dto)
+}
+
+export function batchUpdateTasks(data) {
+  return request.put('/task/batch', data)
 }
 
 export function deleteTask(id) {

@@ -23,6 +23,8 @@
       </nav>
 
       <div class="sidebar-user">
+        <EmailPreferences />
+        <NotificationCenter />
         <span class="user-avatar">{{ userInitial }}</span>
         <div class="user-copy"><strong>{{ userStore.userInfo?.username || '用户' }}</strong><span>{{ userStore.systemRole === 'ADMIN' ? '系统管理员' : '团队成员' }}</span></div>
         <button class="icon-button logout-button" title="退出登录" aria-label="退出登录" @click="handleLogout"><el-icon><SwitchButton /></el-icon></button>
@@ -33,7 +35,7 @@
       <header class="mobile-topbar">
         <button class="icon-button" aria-label="打开导航" @click="mobileOpen = true"><el-icon><Menu /></el-icon></button>
         <BrandMark />
-        <span class="mobile-avatar">{{ userInitial }}</span>
+        <div class="mobile-actions"><EmailPreferences /><NotificationCenter /></div>
       </header>
       <main class="shell-main"><slot /></main>
     </div>
@@ -41,11 +43,13 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Close, DataAnalysis, Delete, Document, Expand, Fold, Grid, Menu, Setting, SwitchButton, Tickets, UserFilled } from '@element-plus/icons-vue'
+import { ChatDotRound, Close, DataAnalysis, Delete, Document, Expand, Fold, Grid, Menu, Setting, SwitchButton, Tickets, UserFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import BrandMark from './BrandMark.vue'
+import EmailPreferences from './EmailPreferences.vue'
+import NotificationCenter from './NotificationCenter.vue'
 
 const props = defineProps({ projectId: { type: [String, Number], default: null }, projectName: { type: String, default: '' } })
 const route = useRoute()
@@ -53,11 +57,13 @@ const router = useRouter()
 const userStore = useUserStore()
 const collapsed = ref(localStorage.getItem('smartpm.sidebar.collapsed') === '1')
 const mobileOpen = ref(false)
+let notificationSocket
+let notificationReconnectTimer
 const userInitial = computed(() => userStore.userInfo?.username?.slice(0, 1).toUpperCase() || 'U')
 const primaryNav = computed(() => {
   const items = [
-    { to: '/dashboard', label: '我的项目', icon: Grid },
-    { to: '/analytics', label: '数据分析', icon: DataAnalysis },
+    { to: '/dashboard', label: '我的工作台', icon: Grid },
+    { to: '/analytics', label: '项目洞察', icon: DataAnalysis },
     { to: '/recycle-bin', label: '回收站', icon: Delete }
   ]
   if (userStore.systemRole === 'ADMIN') items.push({ to: '/admin/users', label: '系统管理', icon: UserFilled })
@@ -65,6 +71,7 @@ const primaryNav = computed(() => {
 })
 const projectNav = computed(() => [
   { to: `/project/${props.projectId}`, label: '任务看板', icon: Tickets },
+  { to: `/project/${props.projectId}/product-lab`, label: '产品共创', icon: ChatDotRound },
   { to: { path: `/project/${props.projectId}/wiki`, query: props.projectName ? { projectName: props.projectName } : {} }, label: '文档中心', icon: Document },
   { to: `/project/${props.projectId}/manage`, label: '项目管理', icon: Setting }
 ])
@@ -73,7 +80,24 @@ function toggleCollapsed() {
   localStorage.setItem('smartpm.sidebar.collapsed', collapsed.value ? '1' : '0')
 }
 function handleLogout() { userStore.logout(); router.push('/login') }
+function connectNotificationSocket() {
+  if (!userStore.token || notificationSocket?.readyState === WebSocket.OPEN || notificationSocket?.readyState === WebSocket.CONNECTING) return
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
+  notificationSocket = new WebSocket(`${protocol}://${location.host}/ws/notifications?token=${encodeURIComponent(userStore.token)}`)
+  notificationSocket.onmessage = event => {
+    try {
+      if (JSON.parse(event.data).type === 'NOTIFICATION_UPDATED') window.dispatchEvent(new CustomEvent('smartpm:notifications'))
+    } catch { /* ignore malformed server event */ }
+  }
+  notificationSocket.onclose = () => { notificationSocket = null; notificationReconnectTimer = window.setTimeout(connectNotificationSocket, 3000) }
+}
+function disconnectNotificationSocket() {
+  window.clearTimeout(notificationReconnectTimer)
+  if (notificationSocket) { notificationSocket.onclose = null; notificationSocket.close(); notificationSocket = null }
+}
 watch(() => route.fullPath, () => { mobileOpen.value = false })
+onMounted(connectNotificationSocket)
+onUnmounted(disconnectNotificationSocket)
 </script>
 
 <style scoped>
@@ -106,7 +130,9 @@ watch(() => route.fullPath, () => { mobileOpen.value = false })
 .is-collapsed .collapse-button { position: absolute; left: 54px; top: 23px; width: 26px; height: 26px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-xs); }
 .is-collapsed .nav-item { justify-content: center; padding-inline: 0; }
 .is-collapsed .nav-item span,.is-collapsed .nav-separator span,.is-collapsed .user-copy,.is-collapsed .logout-button { display: none; }
+.mobile-actions { display:none; }
 .is-collapsed .sidebar-user { justify-content: center; padding-inline: 0; }
+.is-collapsed .sidebar-user .user-avatar { display:none; }
 @media (min-width: 768px) and (max-width: 1100px) {
   .shell-sidebar { width: 72px; }
   .shell-body { margin-left: 72px; }
@@ -116,6 +142,7 @@ watch(() => route.fullPath, () => { mobileOpen.value = false })
   .nav-item { justify-content: center; padding-inline: 0; }
   .nav-item span,.nav-separator span,.user-copy,.logout-button { display: none; }
   .sidebar-user { justify-content: center; padding-inline: 0; }
+  .sidebar-user .user-avatar { display:none; }
 }
 @media (max-width: 767px) {
   .shell-sidebar { z-index: 40; width: min(286px, 86vw); transform: translateX(-104%); box-shadow: var(--shadow-lg); }
@@ -128,9 +155,10 @@ watch(() => route.fullPath, () => { mobileOpen.value = false })
   .is-collapsed .nav-item { justify-content: flex-start; padding: 0 12px; }
   .is-collapsed .nav-item span,.is-collapsed .nav-separator span,.is-collapsed .user-copy,.is-collapsed .logout-button { display: initial; }
   .is-collapsed .sidebar-user { justify-content: flex-start; padding: 14px 6px 2px; }
+  .is-collapsed .sidebar-user .user-avatar { display:grid; }
   .mobile-topbar { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; min-height: 60px; padding: 0 14px; border-bottom: 1px solid var(--border-light); background: rgba(251,252,254,.96); }
   .mobile-topbar :deep(.brand-lockup) { justify-self: center; }
-  .mobile-avatar { justify-self: end; width: 32px; height: 32px; }
+  .mobile-actions { display:flex; justify-self:end; }
   .shell-main { min-height: calc(100dvh - 60px); }
 }
 </style>

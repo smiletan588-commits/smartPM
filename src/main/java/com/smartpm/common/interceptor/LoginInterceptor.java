@@ -18,6 +18,7 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
+    private final JWTUtil jwtUtil;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
@@ -31,19 +32,19 @@ public class LoginInterceptor implements HandlerInterceptor {
         }
 
         String token = authHeader.substring(7);
-        if (!JWTUtil.validate(token)) {
+        if (!jwtUtil.validate(token)) {
             response.setContentType("application/json;charset=UTF-8");
             response.setStatus(401);
             response.getWriter().write(objectMapper.writeValueAsString(R.error(401, "token无效或已过期")));
             return false;
         }
 
-        Long userId = JWTUtil.getUserId(token);
+        Long userId = jwtUtil.getUserId(token);
         User user = userMapper.selectById(userId);
-        if (user == null) {
+        if (user == null || !"ACTIVE".equals(user.getStatus())) {
             response.setContentType("application/json;charset=UTF-8");
             response.setStatus(401);
-            response.getWriter().write(objectMapper.writeValueAsString(R.error(401, "用户不存在")));
+            response.getWriter().write(objectMapper.writeValueAsString(R.error(401, "用户不存在或已停用")));
             return false;
         }
 

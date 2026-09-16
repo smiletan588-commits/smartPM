@@ -1,11 +1,11 @@
 import request from '@/utils/request'
 
 export function login(username, password) {
-  return request.post('/user/login', null, { params: { username, password } })
+  return request.post('/user/login', { username, password }, { errorMode: 'silent' })
 }
 
 export function register(username, password, nickname) {
-  return request.post('/user/register', null, { params: { username, password, nickname } })
+  return request.post('/user/register', { username, password, nickname }, { errorMode: 'silent' })
 }
 
 export function updateIdentity(identity) {

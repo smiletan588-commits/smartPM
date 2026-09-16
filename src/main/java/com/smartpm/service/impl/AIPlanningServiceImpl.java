@@ -12,14 +12,20 @@ import com.smartpm.entity.ProjectMember;
 import com.smartpm.entity.ProjectMilestone;
 import com.smartpm.entity.Task;
 import com.smartpm.entity.User;
+import com.smartpm.entity.MilestoneTask;
 import com.smartpm.mapper.ProjectMapper;
 import com.smartpm.mapper.ProjectMemberMapper;
 import com.smartpm.mapper.ProjectMilestoneMapper;
 import com.smartpm.mapper.TaskMapper;
 import com.smartpm.mapper.UserMapper;
+import com.smartpm.mapper.MilestoneTaskMapper;
 import com.smartpm.service.AIPlanningService;
 import com.smartpm.service.AIService;
 import com.smartpm.service.ProjectService;
+import com.smartpm.service.CollaborationService;
+import com.smartpm.service.NotificationService;
+import com.smartpm.service.RiskService;
+import com.smartpm.service.support.AiTaskDatePolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +42,7 @@ import java.util.stream.StreamSupport;
 @RequiredArgsConstructor
 public class AIPlanningServiceImpl implements AIPlanningService {
 
-    private static final Set<String> ROLES = Set.of("PROJECT_MANAGER", "FRONTEND_DEV", "BACKEND_DEV", "QA_TESTER", "UI_DESIGNER");
+    private static final Set<String> ROLES = Set.of("PROJECT_MANAGER", "PRODUCT_MANAGER", "FRONTEND_DEV", "BACKEND_DEV", "QA_TESTER", "UI_DESIGNER");
     private static final Set<String> PRIORITIES = Set.of("HIGH", "MEDIUM", "LOW");
     private static final Set<String> TAGS = Set.of("BUG", "REQUIREMENT", "DESIGN", "DEVELOPMENT", "TESTING", "DOCUMENTATION");
 
@@ -48,6 +54,10 @@ public class AIPlanningServiceImpl implements AIPlanningService {
     private final ProjectMemberMapper projectMemberMapper;
     private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
+    private final MilestoneTaskMapper milestoneTaskMapper;
+    private final CollaborationService collaborationService;
+    private final NotificationService notificationService;
+    private final RiskService riskService;
 
     @Override
     public AIProjectPlanDTO generateProjectPlan(Long projectId) {
@@ -89,13 +99,16 @@ public class AIPlanningServiceImpl implements AIPlanningService {
             task.setTags(item.getTags());
             task.setStartDate(parseDate(item.getStartDate()));
             task.setDueDate(parseDate(item.getDueDate()));
+            AiTaskDatePolicy.apply(task);
             task.setEstimatedHours(item.getEstimatedHours());
             task.setAcceptanceCriteria(item.getAcceptanceCriteria());
             task.setCreatorId(UserHolder.getUserId());
             task.setOrderIndex(index);
             task.setCreatedAt(LocalDateTime.now());
             task.setUpdatedAt(LocalDateTime.now());
+            task.setAiGenerated(true);
             taskMapper.insert(task);
+            notificationService.notifyAssignment(projectId, task.getId(), task.getAssigneeId(), task.getTitle());
             created.add(task);
         }
         if (plan.getMilestones() != null) {
@@ -107,15 +120,18 @@ public class AIPlanningServiceImpl implements AIPlanningService {
                 milestone.setDescription(item.getDescription());
                 milestone.setTargetDate(parseDate(item.getTargetDate()));
                 milestone.setStatus("PLANNED");
-                milestone.setTaskIds(item.getTaskIndexes() == null ? null : item.getTaskIndexes().stream()
+                List<Long> linkedTaskIds = item.getTaskIndexes() == null ? List.of() : item.getTaskIndexes().stream()
                         .filter(index -> index != null && index >= 0 && index < created.size())
-                        .map(index -> String.valueOf(created.get(index).getId()))
-                        .collect(Collectors.joining(",")));
+                        .map(index -> created.get(index).getId()).toList();
+                milestone.setTaskIds(null);
                 milestone.setCreatedAt(LocalDateTime.now());
                 milestone.setUpdatedAt(LocalDateTime.now());
                 milestoneMapper.insert(milestone);
+                linkedTaskIds.forEach(taskId -> milestoneTaskMapper.insert(new MilestoneTask(milestone.getId(), taskId)));
             }
         }
+        collaborationService.record(projectId, null, "AI_PLAN_APPLIED", "应用了 AI 完整项目计划，共生成 " + created.size() + " 个任务", null, null);
+        riskService.invalidate(projectId);
         return created;
     }
 
@@ -143,12 +159,10 @@ public class AIPlanningServiceImpl implements AIPlanningService {
             task.setTags(normalizeTags(task.getTags()));
             task.setEstimatedHours(task.getEstimatedHours() == null || task.getEstimatedHours() < 1 ? 8 : Math.min(task.getEstimatedHours(), 1000));
             task.setAcceptanceCriteria(blankToDefault(task.getAcceptanceCriteria(), "功能可正常使用，关键流程通过验证。"));
-            LocalDate start = parseDate(task.getStartDate());
-            LocalDate due = parseDate(task.getDueDate());
-            if (start == null) start = LocalDate.now();
-            if (due == null || due.isBefore(start)) due = start.plusDays(3);
-            task.setStartDate(start.toString());
-            task.setDueDate(due.toString());
+            AiTaskDatePolicy.DateRange dates = AiTaskDatePolicy.resolve(
+                    parseDate(task.getStartDate()), parseDate(task.getDueDate()));
+            task.setStartDate(dates.startDate().toString());
+            task.setDueDate(dates.dueDate().toString());
         }
     }
 
@@ -235,7 +249,7 @@ public class AIPlanningServiceImpl implements AIPlanningService {
                 + "只返回 JSON 对象，不要 Markdown。字段严格为 overview、stages、tasks、milestones、risks。\n"
                 + "stages: [{name,startDate,endDate,goal}]；tasks: [{stage,title,description,recommendedRole,priority,tags,startDate,dueDate,estimatedHours,acceptanceCriteria}]；"
                 + "milestones: [{name,description,targetDate,taskIndexes}]；risks: [{level,title,description,mitigation}]。\n"
-                + "任务 5-12 个，日期格式 yyyy-MM-dd；recommendedRole 只能为 PROJECT_MANAGER、FRONTEND_DEV、BACKEND_DEV、QA_TESTER、UI_DESIGNER；priority 只能为 HIGH、MEDIUM、LOW；"
+                + "任务 5-12 个，日期格式 yyyy-MM-dd；recommendedRole 只能为 PROJECT_MANAGER、PRODUCT_MANAGER、FRONTEND_DEV、BACKEND_DEV、QA_TESTER、UI_DESIGNER；priority 只能为 HIGH、MEDIUM、LOW；"
                 + "tags 使用 BUG、REQUIREMENT、DESIGN、DEVELOPMENT、TESTING、DOCUMENTATION 的逗号组合；taskIndexes 使用 tasks 数组从 0 开始的索引。"
                 + "每个任务必须包含可测试的 acceptanceCriteria，并按真实依赖顺序安排。";
     }

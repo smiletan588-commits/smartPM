@@ -4,6 +4,7 @@ import com.smartpm.common.interceptor.LoginInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -13,12 +14,16 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.resource.PathResourceResolver;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 @Configuration
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
     private final LoginInterceptor loginInterceptor;
+
+    @Value("${smartpm.allowed-origins:http://localhost:3000}")
+    private String allowedOrigins;
 
     @Bean
     public BCryptPasswordEncoder bCryptPasswordEncoder() {
@@ -33,7 +38,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOriginPatterns("*")
+                .allowedOrigins(parseAllowedOrigins())
                 .allowedMethods("*")
                 .allowedHeaders("*")
                 .allowCredentials(true)
@@ -79,5 +84,10 @@ public class WebConfig implements WebMvcConfigurer {
                         return null;
                     }
                 });
+    }
+
+    private String[] parseAllowedOrigins() {
+        return Arrays.stream(allowedOrigins.split(",")).map(String::trim)
+                .filter(value -> !value.isEmpty()).toArray(String[]::new);
     }
 }

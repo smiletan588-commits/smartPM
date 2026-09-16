@@ -7,6 +7,8 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
@@ -31,6 +33,22 @@ public class GlobalExceptionHandler {
     public R<Void> handleMethodNotAllowed(HttpRequestMethodNotSupportedException e) {
         log.debug("请求方法不允许: {}", e.getMessage());
         return R.error(405, "请求方法不允许");
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public R<Void> handleValidation(MethodArgumentNotValidException e) {
+        String message = e.getBindingResult().getFieldErrors().stream().findFirst()
+                .map(error -> error.getDefaultMessage()).orElse("请求参数无效");
+        return R.error(400, message);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public R<Void> handleConstraintViolation(ConstraintViolationException e) {
+        String message = e.getConstraintViolations().stream().findFirst()
+                .map(violation -> violation.getMessage()).orElse("请求参数无效");
+        return R.error(400, message);
     }
 
     @ExceptionHandler(Exception.class)

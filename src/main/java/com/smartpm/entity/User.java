@@ -20,7 +20,11 @@ public class User {
 
     private String nickname;
 
-    /** 专业身份：PROJECT_MANAGER / FRONTEND_DEV / BACKEND_DEV / QA_TESTER / UI_DESIGNER */
+    private String email;
+
+    private LocalDateTime emailVerifiedAt;
+
+    /** 专业身份：PROJECT_MANAGER / PRODUCT_MANAGER / FRONTEND_DEV / BACKEND_DEV / QA_TESTER / UI_DESIGNER */
     private String identity;
 
     /** 系统权限：ADMIN / USER。与项目内的成员权限独立。 */

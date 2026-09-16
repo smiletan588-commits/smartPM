@@ -3,7 +3,8 @@
     <main class="content">
       <PageHeader eyebrow="回收站" title="找回误删内容" description="删除的数据会保留在这里。恢复后将回到原来的项目和位置。"><template #actions><el-button :loading="loading" @click="fetchItems">刷新</el-button></template></PageHeader>
       <section class="notice"><strong>恢复规则</strong><span>项目管理员可恢复本项目数据；系统管理员可永久删除。永久删除后无法撤销。</span></section>
-      <section class="bin" v-loading="loading">
+      <StatePanel v-if="loadError" tone="error" title="回收站暂时无法加载" :description="loadError"><template #actions><el-button type="primary" plain @click="fetchItems">重新加载</el-button></template></StatePanel>
+      <section v-else class="bin" v-loading="loading">
         <div class="bin-head"><strong>已删除项目、任务与文档</strong><small>{{ items.length }} 项</small></div>
         <el-table :data="items" class="bin-table desktop-table" empty-text="回收站为空">
           <el-table-column label="内容" min-width="210"><template #default="{ row }"><div class="item-title"><span :class="['type', row.type.toLowerCase()]">{{ typeLabel(row.type) }}</span><strong>{{ row.title }}</strong></div></template></el-table-column>
@@ -34,14 +35,14 @@ import AppShell from '@/components/AppShell.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import StatePanel from '@/components/StatePanel.vue'
 
-const userStore = useUserStore(); const items = ref([]); const loading = ref(false); const busy = ref('')
+const userStore = useUserStore(); const items = ref([]); const loading = ref(false); const busy = ref(''); const loadError = ref('')
 const labels = { PROJECT: '项目', TASK: '任务', WIKI: '文档', ATTACHMENT: '附件' }
 const typeLabel = type => labels[type] || type
 const keyOf = row => `${row.type}-${row.id}`
 const formatTime = value => value ? String(value).replace('T', ' ').slice(0, 16) : '未记录'
-async function fetchItems() { loading.value = true; try { items.value = (await listRecycleBin()).data.data || [] } finally { loading.value = false } }
+async function fetchItems() { loading.value = true; loadError.value=''; try { items.value = (await listRecycleBin({ errorMode:'silent' })).data.data || [] } catch(error) { items.value=[]; loadError.value=error.message || '暂时无法连接服务器，请稍后重试' } finally { loading.value = false } }
 async function restore(row) { busy.value = keyOf(row); try { await restoreRecycleItem(row.type, row.id); ElMessage.success('已恢复到原项目'); await fetchItems() } finally { busy.value = '' } }
-async function permanentlyDelete(row) { try { await ElMessageBox.confirm(`永久删除「${row.title}」后将无法恢复，确定继续吗？`, '永久删除', { type: 'error', confirmButtonText: '永久删除', cancelButtonText: '取消' }) } catch { return }; busy.value = keyOf(row); try { await permanentlyDeleteRecycleItem(row.type, row.id); ElMessage.success('已永久删除'); await fetchItems() } finally { busy.value = '' } }
+async function permanentlyDelete(row) { try { await ElMessageBox.prompt(`永久删除“${row.title}”后将无法恢复。请输入完整名称确认：`, '永久删除', { type: 'error', confirmButtonText: '永久删除', cancelButtonText: '取消', inputPlaceholder: row.title, inputValidator: value => value === row.title || '输入内容与名称不一致' }) } catch { return }; busy.value = keyOf(row); try { await permanentlyDeleteRecycleItem(row.type, row.id); ElMessage.success(`“${row.title}”已永久删除`); await fetchItems() } finally { busy.value = '' } }
 onMounted(fetchItems)
 </script>
 

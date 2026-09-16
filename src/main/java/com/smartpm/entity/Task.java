@@ -1,6 +1,7 @@
 package com.smartpm.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -27,6 +28,7 @@ public class Task {
 
     private String status;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long assigneeId;
 
     /** AI 推荐的专业身份角色 */
@@ -56,6 +58,14 @@ public class Task {
     /** 可验证的任务完成条件 */
     private String acceptanceCriteria;
 
+    /** 是否需要独立验收流程。 */
+    private Boolean reviewRequired;
+
+    /** NOT_REQUIRED / NOT_READY / PENDING / IN_REVIEW / PASSED / REJECTED */
+    private String acceptanceStatus;
+
+    private LocalDateTime acceptanceSubmittedAt;
+
     /** 查询时计算，不落库：是否被未完成前置任务阻塞 */
     @TableField(exist = false)
     private Boolean blocked;
@@ -69,6 +79,13 @@ public class Task {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    /** 最近一次进入 DONE 状态的时间，重新打开任务时清空。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private LocalDateTime completedAt;
+
+    /** 是否由 AI 直接生成，用于效果统计。 */
+    private Boolean aiGenerated;
 
     /** 非空表示已移入回收站。 */
     private LocalDateTime deletedAt;

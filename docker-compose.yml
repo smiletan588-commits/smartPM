@@ -10,7 +10,6 @@ services:
       MYSQL_COLLATION: utf8mb4_unicode_ci
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql
     ports:
       - "3307:3306"
     healthcheck:
@@ -45,12 +44,23 @@ services:
       context: .
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY_MIRROR:-m.daocloud.io/docker.io}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     container_name: smartpm-backend
     environment:
       - MYSQL_HOST=mysql
       - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD:-123456}
       - REDIS_HOST=redis
       - AI_API_KEY=${AI_API_KEY:-}
+      - JWT_SECRET=${JWT_SECRET:-smartpm-docker-development-secret-change-before-production}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-SmartPM@2026}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_AUTH=${SMTP_AUTH:-true}
+      - SMTP_STARTTLS=${SMTP_STARTTLS:-true}
     depends_on:
       mysql:
         condition: service_healthy

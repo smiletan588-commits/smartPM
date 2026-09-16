@@ -11,6 +11,7 @@ import com.smartpm.mapper.TaskAttachmentMapper;
 import com.smartpm.mapper.TaskMapper;
 import com.smartpm.service.ProjectService;
 import com.smartpm.service.TaskAttachmentService;
+import com.smartpm.service.CollaborationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class TaskAttachmentServiceImpl implements TaskAttachmentService {
     private final AttachmentDownloadLogMapper downloadLogMapper;
     private final TaskMapper taskMapper;
     private final ProjectService projectService;
+    private final CollaborationService collaborationService;
 
     @Value("${smartpm.upload-dir:uploads}")
     private String uploadDir;
@@ -82,6 +84,8 @@ public class TaskAttachmentServiceImpl implements TaskAttachmentService {
         attachment.setUploaderId(UserHolder.getUserId());
         attachment.setCreatedAt(LocalDateTime.now());
         attachmentMapper.insert(attachment);
+        collaborationService.record(task.getProjectId(), taskId, "ATTACHMENT_UPLOADED",
+                "上传了附件 " + originalName, null, java.util.Map.of("attachmentId", attachment.getId()));
         return attachment;
     }
 
@@ -109,6 +113,8 @@ public class TaskAttachmentServiceImpl implements TaskAttachmentService {
         attachment.setDeletedAt(LocalDateTime.now());
         attachment.setDeletedBy(UserHolder.getUserId());
         attachmentMapper.updateById(attachment);
+        collaborationService.record(attachment.getProjectId(), attachment.getTaskId(), "ATTACHMENT_DELETED",
+                "删除了附件 " + attachment.getOriginalName(), java.util.Map.of("attachmentId", attachmentId), null);
     }
 
     @Override

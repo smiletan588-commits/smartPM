@@ -14,10 +14,14 @@
   --brand-gradient: #315ee7;
   --todo: #b76e14;
   --todo-bg: #fff6e8;
+  --warning: var(--todo);
+  --warning-soft: var(--todo-bg);
   --progress: #2f6fc2;
   --progress-bg: #edf5ff;
   --done: #287a58;
   --done-bg: #eaf7f0;
+  --success: var(--done);
+  --success-soft: var(--done-bg);
   --danger: #bd4747;
   --danger-bg: #fff0f0;
   --text-primary: #172033;

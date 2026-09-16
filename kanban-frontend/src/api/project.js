@@ -4,8 +4,8 @@ export function createProject(name, description) {
   return request.post('/project/create', null, { params: { name, description } })
 }
 
-export function listProjects() {
-  return request.get('/project/list')
+export function listProjects(config) {
+  return config ? request.get('/project/list', config) : request.get('/project/list')
 }
 
 export function updateProject(id, name, description) {
@@ -68,6 +68,6 @@ export function generateAiProjectPlan(projectId) {
   return request.post(`/project/${projectId}/ai-plan`, null, { timeout: 120000 })
 }
 
-export function applyAiProjectPlan(projectId, plan) {
-  return request.post(`/project/${projectId}/ai-plan/apply`, plan)
+export function applyAiProjectPlan(projectId, plan, operationId) {
+  return request.post(`/project/${projectId}/ai-plan/apply`, plan, { params: { operationId } })
 }

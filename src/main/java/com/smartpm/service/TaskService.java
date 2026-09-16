@@ -1,6 +1,7 @@
 package com.smartpm.service;
 
 import com.smartpm.dto.DragDTO;
+import com.smartpm.dto.BatchTaskUpdateDTO;
 import com.smartpm.dto.TaskUpdateDTO;
 import com.smartpm.entity.Task;
 
@@ -15,6 +16,8 @@ public interface TaskService {
     List<Task> listByProject(Long projectId);
 
     Task update(TaskUpdateDTO dto);
+
+    List<Task> batchUpdate(BatchTaskUpdateDTO dto);
 
     void delete(Long id);
 

@@ -2,6 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 import { useUserStore } from '@/store/user'
+import { AppError, createMessageDeduper, normalizeApiError } from '@/utils/appError'
 
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -20,46 +21,55 @@ request.interceptors.request.use(
   error => Promise.reject(error)
 )
 
-// 响应拦截器 — 统一错误处理
+const shouldNotify = createMessageDeduper(1500)
+let handlingUnauthorized = false
+
+function notifyError(error) {
+  if (error.config?.errorMode === 'silent' || error.originalError?.code === 'ERR_CANCELED') return
+  const message = error.kind === 'NETWORK'
+    ? '暂时无法连接服务器，请检查网络或稍后重试'
+    : error.message
+  if (shouldNotify(`${error.status || error.kind}:${message}`)) ElMessage.error(message)
+}
+
+async function handleUnauthorized(error) {
+  const current = router.currentRoute.value
+  const isAuthRequest = /\/user\/(login|register)$/.test(error.config?.url || '')
+  if (isAuthRequest || current.path === '/login' || handlingUnauthorized) return
+  handlingUnauthorized = true
+  const userStore = useUserStore()
+  userStore.logout()
+  const redirect = current.fullPath && current.fullPath !== '/' ? current.fullPath : '/dashboard'
+  if (shouldNotify('401:登录状态已失效，请重新登录')) ElMessage.error('登录状态已失效，请重新登录')
+  try {
+    await router.replace({ path: '/login', query: { redirect } })
+  } finally {
+    handlingUnauthorized = false
+  }
+}
+
+// 第一层只负责解析后端统一响应，第二层集中展示错误。
 request.interceptors.response.use(
   response => {
-    // 后端统一返回 R，但部分业务异常仍可能使用 HTTP 200。
-    // 这里统一把 code 非 200 的业务响应转为 rejected，避免页面误报成功。
     if (response.data && response.data.code && response.data.code !== 200) {
-      const error = new Error(response.data.msg || '请求处理失败')
-      error.response = response
-      return Promise.reject(error)
+      return Promise.reject(new AppError(response.data.msg || '请求处理失败', {
+        code: response.data.code,
+        status: response.data.code,
+        kind: response.data.code === 403 ? 'PERMISSION' : 'BUSINESS',
+        retryable: response.data.code >= 500,
+        response,
+        config: response.config
+      }))
     }
     return response
-  },
-  error => {
-    if (error.response) {
-      const { status, data } = error.response
-      switch (status) {
-        case 401: {
-          const userStore = useUserStore()
-          userStore.logout()
-          ElMessage.error('登录已过期，请重新登录')
-          router.push('/login')
-          break
-        }
-        case 404:
-          ElMessage.error(data?.msg || '请求的资源不存在')
-          break
-        case 405:
-          ElMessage.error(data?.msg || '请求方法不允许')
-          break
-        case 500:
-          ElMessage.error(data?.msg || '服务器内部错误')
-          break
-        default:
-          ElMessage.error(data?.msg || `请求失败 (${status})`)
-      }
-    } else {
-      ElMessage.error('网络异常，请检查连接')
-    }
-    return Promise.reject(error)
-  }
+  }, error => Promise.reject(error)
 )
+
+request.interceptors.response.use(response => response, async rawError => {
+  const error = normalizeApiError(rawError)
+  if (error.status === 401) await handleUnauthorized(error)
+  else notifyError(error)
+  return Promise.reject(error)
+})
 
 export default request

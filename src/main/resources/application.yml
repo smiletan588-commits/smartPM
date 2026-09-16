@@ -14,6 +14,19 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: 6379
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:true}
 
 mybatis-plus:
   configuration:
@@ -36,6 +49,10 @@ management:
   health:
     redis:
       enabled: false
+    # SMTP is optional. Delivery failures are handled by the outbox retry queue
+    # and must not prevent the backend or its dependent Nginx service from starting.
+    mail:
+      enabled: false
   endpoint:
     health:
       show-details: always
@@ -45,3 +62,14 @@ ai:
   api-key: ${AI_API_KEY:}
   base-url: https://183.253.56.58
   model: deepseek-v4-flash
+
+smartpm:
+  jwt-secret: ${JWT_SECRET:smartpm-local-development-secret-change-before-production-2026}
+  jwt-expire-ms: ${JWT_EXPIRE_MS:86400000}
+  allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
+  initial-admin-password: ${INITIAL_ADMIN_PASSWORD:SmartPM@2026}
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

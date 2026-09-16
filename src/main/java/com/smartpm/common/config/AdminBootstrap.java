@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
@@ -21,6 +22,9 @@ public class AdminBootstrap {
     private final JdbcTemplate jdbcTemplate;
     private final UserMapper userMapper;
     private final BCryptPasswordEncoder passwordEncoder;
+
+    @Value("${smartpm.initial-admin-password:SmartPM@2026}")
+    private String initialAdminPassword;
 
     @Bean
     ApplicationRunner initializeSystemAdmin() {
@@ -36,9 +40,12 @@ public class AdminBootstrap {
     private void ensureAdminAccount() {
         User admin = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, "admin"));
         if (admin == null) {
+            if (initialAdminPassword == null || initialAdminPassword.length() < 8) {
+                throw new IllegalStateException("INITIAL_ADMIN_PASSWORD 至少需要 8 位");
+            }
             admin = new User();
             admin.setUsername("admin");
-            admin.setPassword(passwordEncoder.encode("111"));
+            admin.setPassword(passwordEncoder.encode(initialAdminPassword));
             admin.setNickname("系统管理员");
             admin.setSystemRole("ADMIN");
             admin.setStatus("ACTIVE");
@@ -48,12 +55,12 @@ public class AdminBootstrap {
             log.info("默认系统管理员账号 admin 已创建");
             return;
         }
-        // 该账号是本次安装明确要求创建的初始管理员；每次启动同步为指定初始凭据。
-        admin.setPassword(passwordEncoder.encode("111"));
-        admin.setSystemRole("ADMIN");
-        admin.setStatus("ACTIVE");
-        admin.setUpdatedAt(LocalDateTime.now());
-        userMapper.updateById(admin);
+        // 后续启动不覆盖管理员密码或状态，避免停用账号被意外恢复。
+        if (!"ADMIN".equals(admin.getSystemRole())) {
+            admin.setSystemRole("ADMIN");
+            admin.setUpdatedAt(LocalDateTime.now());
+            userMapper.updateById(admin);
+        }
     }
 
     private void addColumnIfMissing(String sql) {
