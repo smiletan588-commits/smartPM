@@ -16,8 +16,8 @@
           <el-dropdown trigger="click">
             <el-button type="primary"><el-icon><MagicStick /></el-icon> AI 助手</el-button>
             <template #dropdown><el-dropdown-menu>
-              <el-dropdown-item :disabled="!canWrite || hasTasks || planLoading" @click="generateProjectPlan">AI 完整计划</el-dropdown-item>
-              <el-dropdown-item :disabled="!canWrite || hasTasks || initTasksLoading" @click="handleInitTasks">AI 生成任务</el-dropdown-item>
+              <el-dropdown-item :disabled="!canWrite || hasTasks" @click="openPlanning('PLAN')">AI 完整计划</el-dropdown-item>
+              <el-dropdown-item :disabled="!canWrite || hasTasks" @click="openPlanning('INIT')">AI 生成任务</el-dropdown-item>
               <el-dropdown-item divided :disabled="summaryLoading" @click="openSummary">生成项目总结</el-dropdown-item>
             </el-dropdown-menu></template>
           </el-dropdown>
@@ -87,10 +87,10 @@
                     <span v-for="tag in taskTags(element)" :key="tag" class="task-label">{{ tagLabel(tag) }}</span>
                     <span v-if="element.blocked" class="blocked-chip">被阻塞</span>
                   </div>
-                  <div v-if="element.recommendedRole || element.assigneeId" class="task-assignment-row">
-                    <span v-if="element.recommendedRole" class="role-tag"
+                  <div v-if="element.recommendedRole || element.recommendedSkill || element.assigneeId" class="task-assignment-row">
+                    <span v-if="element.recommendedRole || element.recommendedSkill" class="role-tag"
                       :style="{ background: (roleConfig[element.recommendedRole] || {}).color || '#94A3B8' }">
-                      {{ (roleConfig[element.recommendedRole] || {}).label || element.recommendedRole }}
+                      {{ (roleConfig[element.recommendedRole] || {}).label || element.recommendedSkill || element.recommendedRole }}
                     </span>
                     <span v-if="assigneeName(element)" class="assignee-name">负责人：{{ assigneeName(element) }}</span>
                     <span v-else class="assignee-name pending">等待成员接取</span>
@@ -149,10 +149,10 @@
                     <span v-for="tag in taskTags(element)" :key="tag" class="task-label">{{ tagLabel(tag) }}</span>
                     <span v-if="element.blocked" class="blocked-chip">被阻塞</span>
                   </div>
-                  <div v-if="element.recommendedRole || element.assigneeId" class="task-assignment-row">
-                    <span v-if="element.recommendedRole" class="role-tag"
+                  <div v-if="element.recommendedRole || element.recommendedSkill || element.assigneeId" class="task-assignment-row">
+                    <span v-if="element.recommendedRole || element.recommendedSkill" class="role-tag"
                       :style="{ background: (roleConfig[element.recommendedRole] || {}).color || '#94A3B8' }">
-                      {{ (roleConfig[element.recommendedRole] || {}).label || element.recommendedRole }}
+                      {{ (roleConfig[element.recommendedRole] || {}).label || element.recommendedSkill || element.recommendedRole }}
                     </span>
                     <span v-if="assigneeName(element)" class="assignee-name">负责人：{{ assigneeName(element) }}</span>
                     <span v-else class="assignee-name pending">等待成员接取</span>
@@ -208,10 +208,10 @@
                     <span v-for="tag in taskTags(element)" :key="tag" class="task-label">{{ tagLabel(tag) }}</span>
                     <span v-if="element.blocked" class="blocked-chip">被阻塞</span>
                   </div>
-                  <div v-if="element.recommendedRole || element.assigneeId" class="task-assignment-row">
-                    <span v-if="element.recommendedRole" class="role-tag"
+                  <div v-if="element.recommendedRole || element.recommendedSkill || element.assigneeId" class="task-assignment-row">
+                    <span v-if="element.recommendedRole || element.recommendedSkill" class="role-tag"
                       :style="{ background: (roleConfig[element.recommendedRole] || {}).color || '#94A3B8' }">
-                      {{ (roleConfig[element.recommendedRole] || {}).label || element.recommendedRole }}
+                      {{ (roleConfig[element.recommendedRole] || {}).label || element.recommendedSkill || element.recommendedRole }}
                     </span>
                     <span v-if="assigneeName(element)" class="assignee-name">负责人：{{ assigneeName(element) }}</span>
                     <span v-else class="assignee-name pending">等待成员接取</span>
@@ -317,9 +317,9 @@
         </section>
         <div v-if="selectedTask.blocked" class="blocked-notice">此任务被前置任务阻塞：{{ (selectedTask.blockedByTaskTitles || []).join('、') }}</div>
         <div v-else-if="dependencyTitles(selectedTask).length" class="dependency-notice"><span>前置依赖</span><strong>{{ dependencyTitles(selectedTask).join('、') }}</strong></div>
-        <div class="detail-meta task-assignment" v-if="selectedTask.recommendedRole">
+        <div class="detail-meta task-assignment" v-if="selectedTask.recommendedRole || selectedTask.recommendedSkill">
           <span class="role-tag" :style="{ background: (roleConfig[selectedTask.recommendedRole] || {}).color || '#94A3B8' }">
-            推荐岗位：{{ (roleConfig[selectedTask.recommendedRole] || {}).label || selectedTask.recommendedRole }}
+            推荐{{ selectedTask.recommendedRole ? '岗位' : '能力' }}：{{ (roleConfig[selectedTask.recommendedRole] || {}).label || selectedTask.recommendedSkill || selectedTask.recommendedRole }}
           </span>
           <span v-if="selectedTask.assigneeId && memberMap[selectedTask.assigneeId]">
             已指派给 {{ memberMap[selectedTask.assigneeId].nickname }}
@@ -363,9 +363,8 @@
               </span>
             </div>
             <el-button type="primary" size="small"
-              :loading="decomposingTaskId === selectedTask.id"
-              :disabled="!canWrite" :title="writePermissionHint" @click="handleDecompose(selectedTask)">
-               AI 智能拆解步骤
+              :disabled="!canWrite || selectedTask.status === 'DONE'" :title="selectedTask.status === 'DONE' ? '已完成任务无需继续拆解' : writePermissionHint" @click="openPlanning('DECOMPOSE', selectedTask)">
+               AI 辅助拆解
             </el-button>
           </div>
           <div class="subtask-progress-bar" v-if="totalCount(selectedTask.id) > 0">
@@ -384,9 +383,9 @@
               <span class="subtask-title">{{ sub.title }}</span>
             </el-checkbox>
             <p class="subtask-desc" v-if="sub.description">{{ sub.description }}</p>
-            <div class="subtask-meta" v-if="sub.recommendedRole">
+            <div class="subtask-meta" v-if="sub.recommendedRole || sub.recommendedSkill">
               <span class="role-tag" :style="{ background: (roleConfig[sub.recommendedRole] || {}).color || '#94A3B8' }">
-                推荐：{{ (roleConfig[sub.recommendedRole] || {}).label || sub.recommendedRole }}
+                推荐：{{ (roleConfig[sub.recommendedRole] || {}).label || sub.recommendedSkill || sub.recommendedRole }}
               </span>
               <span class="assignee-info" v-if="sub.assigneeId && memberMap[sub.assigneeId]">
                 指派给：{{ memberMap[sub.assigneeId].nickname }}
@@ -580,17 +579,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="planVisible" title="AI 完整项目计划" width="820px" :close-on-click-modal="false">
-      <div v-if="projectPlan" class="ai-plan-preview">
-        <p class="plan-overview">{{ projectPlan.overview }}</p>
-        <section><h4>项目阶段</h4><div class="plan-stage-list"><span v-for="stage in projectPlan.stages" :key="stage.name">{{ stage.name }} · {{ stage.startDate }} 至 {{ stage.endDate }}</span></div></section>
-        <section><h4>计划任务（{{ projectPlan.tasks?.length || 0 }}）</h4><article v-for="(task, index) in projectPlan.tasks" :key="`${task.title}-${index}`" class="plan-task"><strong>{{ index + 1 }}. {{ task.title }}</strong><span>{{ roleLabel(task.recommendedRole) }} · {{ priorityLabel(task.priority) }} · {{ task.estimatedHours }}h</span><p>{{ task.description }}</p><small>验收：{{ task.acceptanceCriteria }}</small></article></section>
-        <section v-if="projectPlan.milestones?.length"><h4>里程碑</h4><div class="plan-stage-list"><span v-for="milestone in projectPlan.milestones" :key="milestone.name">{{ milestone.name }} · {{ milestone.targetDate }}</span></div></section>
-        <section v-if="projectPlan.risks?.length"><h4>风险清单</h4><article v-for="risk in projectPlan.risks" :key="risk.title" class="plan-risk"><strong>{{ risk.level }} · {{ risk.title }}</strong><p>{{ risk.description }}</p><small>建议：{{ risk.mitigation }}</small></article></section>
-        <div v-if="projectPlanOperationId" class="ai-feedback"><span>为本次计划评分</span><el-rate v-model="projectPlanRating" @change="rating => rateAi(projectPlanOperationId, rating)" /></div>
-      </div>
-      <template #footer><el-button @click="planVisible = false">取消</el-button><el-button type="primary" :loading="planApplying" :disabled="!canWrite" :title="writePermissionHint" @click="applyProjectPlan">确认创建任务与里程碑</el-button></template>
-    </el-dialog>
+    <AiPlanningDrawer ref="planningDrawer" :project-id="projectId" :project-name="projectName" :project-description="projectDescription" :members="projectMembers" @applied="onPlanningApplied" />
 
     <el-dialog v-model="optimizationVisible" title="AI 任务优化建议" width="620px" :close-on-click-modal="false">
       <div v-if="optimization" class="optimization-preview">
@@ -615,8 +604,8 @@ import { Delete, Loading, VideoPlay, CircleCheck, MagicStick, Paperclip, Downloa
 import draggable from 'vuedraggable'
 import MarkdownIt from 'markdown-it'
 import { useUserStore } from '@/store/user'
-import { listProjects, listProjectMembers, updateMyProjectIdentity, generateAiProjectPlan, applyAiProjectPlan } from '@/api/project'
-import { listTasks, createTask, updateTask, batchUpdateTasks, deleteTask, decomposeTask, listSubtasks, toggleSubtask, initProjectTasks, listTaskAttachments, uploadTaskAttachment, deleteTaskAttachment, listAttachmentDownloadLogs, optimizeTaskWithAi } from '@/api/task'
+import { listProjects, listProjectMembers, updateMyProjectIdentity } from '@/api/project'
+import { listTasks, createTask, updateTask, batchUpdateTasks, deleteTask, listSubtasks, toggleSubtask, listTaskAttachments, uploadTaskAttachment, deleteTaskAttachment, listAttachmentDownloadLogs, optimizeTaskWithAi } from '@/api/task'
 import { streamProjectSummary } from '@/api/summary'
 import { listTaskComments, addTaskComment, deleteTaskComment, listTaskActivities } from '@/api/collaboration'
 import { submitAiFeedback, markAiOperationApplied } from '@/api/ai'
@@ -625,6 +614,7 @@ import { getTaskRecurrence, saveTaskRecurrence, deleteTaskRecurrence } from '@/a
 import { addAcceptanceChecklist, addTimeEntry, deleteAcceptanceChecklist, getTaskAcceptance, listTimeEntries, toggleAcceptanceChecklist, updateTaskAcceptance } from '@/api/delivery'
 import request from '@/utils/request'
 import AppShell from '@/components/AppShell.vue'
+import AiPlanningDrawer from '@/components/AiPlanningDrawer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import StatePanel from '@/components/StatePanel.vue'
 import { canCommentInProject } from '@/utils/permissions'
@@ -637,6 +627,7 @@ const router = useRouter()
 const userStore = useUserStore()
 const projectId = Number(route.params.id)
 const projectName = ref('')
+const projectDescription = ref('')
 
 // 看板三列（仅主任务）
 const todoList = ref([])
@@ -862,7 +853,9 @@ function isOverdue(dateStr) {
 async function fetchProjectName() {
   try {
     const res = await listProjects()
-    projectName.value = res.data.data.find(p => p.id === projectId)?.name || '未知项目'
+    const project = res.data.data.find(p => p.id === projectId)
+    projectName.value = project?.name || '未知项目'
+    projectDescription.value = project?.description || ''
   } catch { projectName.value = '未知项目' }
 }
 
@@ -1153,66 +1146,14 @@ async function toggleSubtaskStatus(sub, checked) {
   }
 }
 
-// AI 生成初始任务：仅允许空项目执行，生成结果统一进入待办列。
-const initTasksLoading = ref(false)
-const planLoading = ref(false)
-const planApplying = ref(false)
-const planVisible = ref(false)
-const projectPlan = ref(null)
-const projectPlanOperationId = ref(null)
-const projectPlanRating = ref(0)
-
-async function handleInitTasks() {
+const planningDrawer = ref(null)
+function openPlanning(mode, task = null) {
   if (!canWrite.value) return ElMessage.warning(writePermissionHint.value)
-  if (hasTasks.value || initTasksLoading.value) return
-  initTasksLoading.value = true
-  try {
-    await initProjectTasks(projectId)
-    ElMessage.success('AI 已根据项目目标生成任务，项目成员可接取后开始执行')
-    await fetchTasks()
-  } finally {
-    initTasksLoading.value = false
-  }
+  planningDrawer.value?.open(mode, task)
 }
-
-async function generateProjectPlan() {
-  if (!canWrite.value) return ElMessage.warning(writePermissionHint.value)
-  if (hasTasks.value || planLoading.value) return
-  planLoading.value = true
-  try {
-    const response = await generateAiProjectPlan(projectId)
-    projectPlan.value = response.data.data
-    projectPlanOperationId.value = Number(response.headers['x-ai-operation-id']) || null
-    projectPlanRating.value = 0
-    planVisible.value = true
-  } finally { planLoading.value = false }
-}
-
-async function applyProjectPlan() {
-  if (!canWrite.value) return ElMessage.warning(writePermissionHint.value)
-  if (!projectPlan.value || planApplying.value) return
-  planApplying.value = true
-  try {
-    const response = await applyAiProjectPlan(projectId, projectPlan.value, projectPlanOperationId.value)
-    planVisible.value = false
-    ElMessage.success(`已创建 ${response.data.data?.length || 0} 个任务和相关里程碑`)
-    await fetchTasks()
-  } finally { planApplying.value = false }
-}
-
-// AI 拆解
-const decomposingTaskId = ref(null)
-
-async function handleDecompose(task) {
-  if (!canWrite.value) return ElMessage.warning(writePermissionHint.value)
-  decomposingTaskId.value = task.id
-  try {
-    await decomposeTask(task.id)
-    ElMessage.success('AI 已拆解子任务')
-    await fetchSubtasksForTask(task.id)
-  } finally {
-    decomposingTaskId.value = null
-  }
+async function onPlanningApplied(parentTaskId) {
+  if (parentTaskId) await fetchSubtasksForTask(parentTaskId)
+  else await fetchTasks()
 }
 
 // 拖拽：同列可排序，跨列只能向前推进一个阶段。

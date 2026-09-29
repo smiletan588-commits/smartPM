@@ -34,6 +34,9 @@ public class Task {
     /** AI 推荐的专业身份角色 */
     private String recommendedRole;
 
+    /** 不属于系统固定岗位的能力建议，不参与权限或自动指派。 */
+    private String recommendedSkill;
+
     /** 任务优先级：HIGH / MEDIUM / LOW */
     private String priority;
 

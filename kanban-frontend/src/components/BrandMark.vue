@@ -1,21 +1,18 @@
 <template>
-  <span class="brand-lockup" :class="{ compact }">
-    <svg class="brand-symbol" viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="3" y="4" width="7" height="24" rx="3" fill="currentColor" />
-      <rect x="12" y="4" width="17" height="8" rx="3" fill="currentColor" />
-      <rect x="12" y="15" width="12" height="7" rx="3" fill="currentColor" opacity=".72" />
-    </svg>
-    <strong v-if="!compact">SmartPM</strong>
+  <span class="brand-lockup" :class="{ compact }" role="img" aria-label="SmartPM">
+    <img class="brand-symbol" :src="iconUrl" alt="" aria-hidden="true" width="28" height="30" />
+    <strong v-if="!compact" class="brand-name" aria-hidden="true">SmartPM</strong>
   </span>
 </template>
 
 <script setup>
 defineProps({ compact: { type: Boolean, default: false } })
+const iconUrl = `${import.meta.env.BASE_URL}smartpm-icon.svg`
 </script>
 
 <style scoped>
-.brand-lockup { display: inline-flex; align-items: center; gap: 10px; min-width: 0; color: var(--brand); }
-.brand-symbol { width: 28px; height: 28px; flex: 0 0 auto; }
-strong { color: var(--text-primary); font-size: 17px; letter-spacing: -.02em; }
-.compact .brand-symbol { width: 26px; height: 26px; }
+.brand-lockup { display: inline-flex; align-items: center; gap: 9px; min-width: 0; flex-shrink: 0; }
+.brand-symbol { display: block; width: 28px; height: auto; flex: 0 0 auto; }
+.brand-name { color: #172238; font-family: "Segoe UI", Arial, sans-serif; font-size: 19px; font-weight: 600; line-height: 1; letter-spacing: -.033em; white-space: nowrap; }
+.compact .brand-symbol { width: 26px; height: auto; }
 </style>

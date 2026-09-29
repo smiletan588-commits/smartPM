@@ -60,8 +60,8 @@ management:
 # AI 大模型配置（兼容 OpenAI 协议）
 ai:
   api-key: ${AI_API_KEY:}
-  base-url: https://183.253.56.58
-  model: deepseek-v4-flash
+  base-url: https://api.deepseek.com
+  model: deepseek-flash
 
 smartpm:
   jwt-secret: ${JWT_SECRET:smartpm-local-development-secret-change-before-production-2026}

@@ -15,6 +15,14 @@ const tasks = [
   { id: 13, projectId: 1, title: '整理毕业答辩演示数据', description: '准备项目列表、进度分析与里程碑示例', status: 'DONE', priority: 'LOW', assigneeId: 1, assigneeName: '张明', dueDate: '2026-09-06', startDate: '2026-09-01', estimatedHours: 5, actualHours: 5 },
   { id: 14, projectId: 1, title: '实现一个用于验证超长任务标题在任务卡片和甘特图中是否能够正确截断而不会撑破页面布局的测试任务', description: '', status: 'TODO', priority: 'MEDIUM', assigneeName: '林悦', dueDate: '2026-09-18', startDate: '2026-09-08', estimatedHours: 10, actualHours: 0 }
 ]
+const planningDraft = {
+  id: 501, projectId: 1, mode: 'DECOMPOSE', parentTaskId: 11, version: 1, status: 'DRAFT', updatedAt: '2026-09-16T10:00:00',
+  input: { mode: 'DECOMPOSE', parentTaskId: 11, projectType: 'SOFTWARE', goal: tasks[0].description, deliverable: '可用的移动端看板', scope: tasks[0].title, wikiIds: [] },
+  content: { overview: '只拆分独立、可验收的适配工作', assumptions: ['需确认最低支持的手机宽度'], tasks: [
+    { title: '适配移动端看板布局', description: '调整三列看板在窄屏下的布局', deliverable: '可操作的移动端看板', acceptanceCriteria: '390px 宽度下无横向溢出', fitReason: '直接满足父任务的窄屏操作目标', recommendedRole: 'FRONTEND_DEV', recommendedSkill: null, priority: 'MEDIUM', tags: 'DEVELOPMENT', startDate: '2026-09-07', dueDate: '2026-09-10', dependencyIndexes: [] },
+    { title: '检查移动端筛选与拖拽', description: '验证筛选和任务状态操作', deliverable: '移动端验收记录', acceptanceCriteria: '关键操作均能通过触控完成', fitReason: '确认父任务交付可用', recommendedRole: 'QA_TESTER', recommendedSkill: null, priority: 'MEDIUM', tags: 'TESTING', startDate: '2026-09-11', dueDate: '2026-09-12', dependencyIndexes: [0] }
+  ] }, issues: []
+}
 const members = [{ userId: 1, username: 'admin', nickname: '张明', identity: 'PROJECT_MANAGER', permission: 'ADMIN' }, { userId: 2, username: 'linyue', nickname: '林悦', identity: 'FRONTEND_DEV', permission: 'MEMBER' }, { userId: 3, username: 'chenchuan', nickname: '陈川', identity: 'BACKEND_DEV', permission: 'MEMBER' }]
 const riskOverview = {
   highCount: 1, mediumCount: 1, lowCount: 1,
@@ -62,6 +70,8 @@ function dataFor(url) {
   if (pathname === '/user/notification-preferences') return { email: '', emailEnabled: false, assignmentEnabled: true, mentionEnabled: true, deadlineEnabled: true, riskEnabled: true }
   if (pathname.endsWith('/members')) return members
   if (pathname === '/task/list/1') return tasks
+  if (pathname === '/project/1/planning/drafts') return [planningDraft]
+  if (pathname === '/project/1/planning/drafts/501') return planningDraft
   if (pathname.includes('/subtasks') || pathname.includes('/attachments')) return []
   if (/^\/task\/\d+\/acceptance$/.test(pathname)) return { taskId: 11, reviewRequired: true, status: 'PENDING', checklist: [{ id: 1, content: '移动端流程通过', checked: true }], reviews: [] }
   if (/^\/task\/\d+\/time-entries$/.test(pathname)) return [{ id: 1, userName: '林悦', workDate: '2026-09-10', hours: 3.5, note: '完成适配' }]
@@ -161,6 +171,15 @@ function dataFor(url) {
       layoutBroken: detailLayout.horizontalOverflow > 0 || detailLayout.titleWidth < Math.min(220, width - 80)
     })
     await page.screenshot({ path: path.join(outputDir, `task-detail-${width}.png`), fullPage: true })
+    await page.getByRole('button', { name: 'AI 辅助拆解' }).click()
+    await page.getByRole('heading', { name: '拆解当前任务' }).waitFor({ state: 'visible' })
+    await page.locator('.draft-history button').first().click()
+    await page.getByRole('heading', { name: '逐项确认工作内容' }).waitFor({ state: 'visible' })
+    await page.waitForFunction(() => document.querySelector('.planning-drawer .el-drawer__body')?.scrollTop === 0)
+    const planningOverflow = await page.locator('.planning-drawer .el-drawer__body').evaluate(element => Math.max(0, element.scrollWidth - element.clientWidth))
+    results.push({ width, route: 'ai-planning-review', visible: true, overflow: planningOverflow })
+    await page.screenshot({ path: path.join(outputDir, `ai-planning-review-${width}.png`), fullPage: true })
+    await page.keyboard.press('Escape')
     await page.keyboard.press('Escape')
     if (width === 1440) {
       await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' })

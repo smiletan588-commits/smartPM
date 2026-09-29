@@ -677,7 +677,7 @@ class GraduationFeatureIntegrationTest {
         mvc.perform(get("/api/workspace/role-view").header("Authorization", admin.authorization()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.identity").value("SYSTEM_ADMIN"));
         mvc.perform(get("/api/admin/system-overview").header("Authorization", admin.authorization()))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.migrationVersion").value("11"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.migrationVersion").value("12"));
         mvc.perform(get("/api/admin/audit-events").header("Authorization", admin.authorization())
                         .param("projectId", String.valueOf(projectId)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(6)));

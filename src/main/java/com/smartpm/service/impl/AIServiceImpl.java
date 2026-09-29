@@ -23,6 +23,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class AIServiceImpl implements AIService {
+    private static final int JSON_MAX_TOKENS = 16384;
 
     private final AIConfigProperties aiConfig;
     private final WebClient.Builder webClientBuilder;
@@ -39,7 +40,6 @@ public class AIServiceImpl implements AIService {
                 .baseUrl(aiConfig.getBaseUrl())
                 .defaultHeader("Authorization", "Bearer " + (apiKeyConfigured ? apiKey : ""))
                 .defaultHeader("Content-Type", "application/json")
-                .defaultHeader("Host", "api.deepseek.com")
                 .build();
         log.info("[AI] 初始化完成: baseUrl={}, model={}, apiKeyConfigured={}",
                 aiConfig.getBaseUrl(), aiConfig.getModel(), apiKeyConfigured);
@@ -113,18 +113,31 @@ public class AIServiceImpl implements AIService {
 
     @Override
     public String chat(String prompt) {
+        return chat(prompt, false);
+    }
+
+    @Override
+    public String chatJson(String prompt) {
+        return chat(prompt, true);
+    }
+
+    private String chat(String prompt, boolean jsonMode) {
         ensureApiKeyConfigured();
         if (prompt == null || prompt.isBlank()) {
             throw new IllegalArgumentException("prompt 不能为空");
         }
 
-        Map<String, Object> body = Map.of(
-                "model", aiConfig.getModel(),
-                "messages", List.of(Map.of("role", "user", "content", prompt)),
-                "stream", false
-        );
+        Map<String, Object> body = jsonMode
+                ? Map.of("model", aiConfig.getModel(),
+                        "messages", List.of(Map.of("role", "user", "content", prompt)),
+                        "stream", false,
+                        "response_format", Map.of("type", "json_object"),
+                        "max_tokens", JSON_MAX_TOKENS)
+                : Map.of("model", aiConfig.getModel(),
+                        "messages", List.of(Map.of("role", "user", "content", prompt)),
+                        "stream", false);
 
-        log.info("[AI] 发起非流式调用: model={}, promptLength={}", aiConfig.getModel(), prompt.length());
+        log.info("[AI] 发起非流式调用: model={}, jsonMode={}, promptLength={}", aiConfig.getModel(), jsonMode, prompt.length());
 
         try {
             String response = webClient.post()
@@ -137,15 +150,23 @@ public class AIServiceImpl implements AIService {
             JsonNode root = objectMapper.readTree(response);
             JsonNode choices = root.path("choices");
             if (!choices.isEmpty()) {
-                JsonNode content = choices.get(0).path("message").path("content");
+                JsonNode choice = choices.get(0);
+                if (jsonMode && "length".equals(choice.path("finish_reason").asText())) {
+                    throw new BusinessException("AI 输出超出长度限制，请缩小规划范围后重试");
+                }
+                JsonNode content = choice.path("message").path("content");
                 if (!content.isNull() && !content.isMissingNode()) {
                     String text = content.asText();
+                    if (jsonMode && text.isBlank()) throw new BusinessException("AI 返回了空的规划内容，请重试");
                     log.info("[AI] 非流式响应: {} chars", text.length());
                     return text;
                 }
             }
             log.warn("[AI] 非流式响应的 choices 为空");
+            if (jsonMode) throw new BusinessException("AI 未返回规划内容，请重试");
             return "";
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("[AI] 非流式调用失败: {}", e.getMessage(), e);
             throw new BusinessException("AI 服务调用失败，请确认后端已加载 AI 配置后重试");

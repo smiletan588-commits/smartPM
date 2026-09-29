@@ -1,0 +1,7 @@
+[
+  {"id":"EDGE-01","category":"信息不足","projectType":"SOFTWARE","projectName":"校园服务平台","goal":"","deliverable":"","scope":"","expected":"必须先澄清目标、交付物和范围，不能仅凭名称生成任务"},
+  {"id":"EDGE-02","category":"无需拆解","projectType":"SOFTWARE","parentTask":"在登录页增加密码显示切换；验收时验证按钮和键盘操作","expected":"允许返回空任务列表和无需继续拆解的理由"},
+  {"id":"EDGE-03","category":"已有相似子任务","projectType":"SOFTWARE","parentTask":"实现报名流程","existingSubtasks":["制作报名表单","增加报名成功反馈"],"expected":"不重复生成已有子任务；相似标题提示人工核对"},
+  {"id":"EDGE-04","category":"非研发项目","projectType":"GENERAL","projectName":"社区志愿活动","goal":"完成一场社区志愿活动","deliverable":"活动执行记录和总结","scope":"招募、培训、现场组织","expected":"任务与活动相关，不强制研发岗位或开发标签"},
+  {"id":"EDGE-05","category":"期限冲突","projectType":"SOFTWARE","parentTask":"完成报名模块","parentDueDate":"2026-10-15","candidateDueDate":"2026-10-20","expected":"草稿可展示冲突，但应用前必须修正；不能静默修改用户数据"}
+]
